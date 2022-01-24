@@ -115,10 +115,13 @@ fn handle_list(
 fn handle_name_value(name: &Ident, value: &Lit, struct_name: &mut Ident) {
     match value {
         &Lit::Str(ref name_value, _) => {
-            if name == "optional_name" {
+            if name == "doc" {
+                // Ignore doc strings when parsing.
+                return;
+            } else if name == "optional_name" {
                 *struct_name = Ident::new(name_value.clone())
             } else {
-                panic!("Only optional_name is supported");
+                panic!("Only optional_name is supported, not {}", name);
             }
         }
         _ => panic!("optional_name should be a string"),
