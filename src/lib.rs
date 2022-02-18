@@ -13,7 +13,7 @@ use syn::Lit;
 
 #[proc_macro_derive(
     OptionalStruct,
-    attributes(optional_name, optional_derive, opt_nested_original, opt_nested_generated)
+    attributes(optional_name, optional_derive, opt_nested_original, opt_nested_generated, opt_lenient)
 )]
 pub fn optional_struct(input: TokenStream) -> TokenStream {
     let s = input.to_string();
@@ -80,12 +80,27 @@ fn create_nested_names_map(orig: Vec<Ident>, gen: Vec<Ident>) -> HashMap<String,
     map
 }
 
+fn handle_name(
+    name: &Ident,
+    lenient: &mut bool,
+) {
+    match name.to_string().as_str() {
+        "opt_lenient" => *lenient = true,
+        _ => {
+            if !*lenient {
+                panic!("Only word opt_lenient is supported, not {}", name)
+            }
+        },
+    };
+}
+
 fn handle_list(
     name: &Ident,
     values: &Vec<syn::NestedMetaItem>,
     nested_original: &mut Vec<Ident>,
     nested_generated: &mut Vec<Ident>,
     derives: &mut Tokens,
+    lenient: &mut bool,
 ) {
     match name.to_string().as_str() {
         "optional_derive" => {
@@ -108,7 +123,11 @@ fn handle_list(
                 nested_original.push(original_nested_name.clone());
             }
         }
-        _ => panic!("Only optional_derive are supported"),
+        _ => {
+            if !*lenient {
+                panic!("Only optional_derive is supported, not {}", name)
+            }
+        },
     };
 }
 
@@ -136,10 +155,11 @@ fn parse_attributes(ast: &syn::DeriveInput) -> Data {
     let mut derives = quote!{};
     let mut nested_generated = Vec::new();
     let mut nested_original = Vec::new();
+    let mut lenient = false;
 
     for attribute in &ast.attrs {
         match &attribute.value {
-            &syn::MetaItem::Word(_) => panic!("No word attribute is supported"),
+            &syn::MetaItem::Word(ref name) => handle_name(name, &mut lenient),
             &syn::MetaItem::NameValue(ref name, ref value) => {
                 handle_name_value(name, value, &mut struct_name)
             }
@@ -149,6 +169,7 @@ fn parse_attributes(ast: &syn::DeriveInput) -> Data {
                 &mut nested_original,
                 &mut nested_generated,
                 &mut derives,
+                &mut lenient,
             ),
         }
     }
