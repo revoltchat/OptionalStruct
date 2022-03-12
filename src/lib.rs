@@ -13,7 +13,7 @@ use syn::Lit;
 
 #[proc_macro_derive(
     OptionalStruct,
-    attributes(optional_name, optional_derive, opt_nested_original, opt_nested_generated, opt_lenient, opt_skip_serializing_none)
+    attributes(optional_name, optional_derive, opt_nested_original, opt_nested_generated, opt_lenient, opt_skip_serializing_none, opt_some_priority)
 )]
 pub fn optional_struct(input: TokenStream) -> TokenStream {
     let s = input.to_string();
@@ -40,16 +40,18 @@ struct Data {
     derives: Tokens,
     nested_names: HashMap<String, String>,
     skip_serializing_none: bool,
+    some_priority: bool,
 }
 
 impl Data {
-    fn explode(self) -> (Ident, Ident, Tokens, HashMap<String, String>, bool) {
+    fn explode(self) -> (Ident, Ident, Tokens, HashMap<String, String>, bool, bool) {
         (
             self.orignal_struct_name,
             self.optional_struct_name,
             self.derives,
             self.nested_names,
-            self.skip_serializing_none
+            self.skip_serializing_none,
+            self.some_priority
         )
     }
 }
@@ -86,13 +88,15 @@ fn handle_name(
     name: &Ident,
     lenient: &mut bool,
     skip_serializing_none: &mut bool,
+    some_priority: &mut bool,
 ) {
     match name.to_string().as_str() {
         "opt_lenient" => *lenient = true,
         "opt_skip_serializing_none" => *skip_serializing_none = true,
+        "opt_some_priority" => *some_priority = true,
         _ => {
             if !*lenient {
-                panic!("Only word opt_lenient and opt_skip_serializing_none are supported, not {}", name)
+                panic!("Only word opt_lenient, opt_skip_serializing_none and opt_some_priority are supported, not {}", name)
             }
         },
     };
@@ -161,10 +165,11 @@ fn parse_attributes(ast: &syn::DeriveInput) -> Data {
     let mut nested_original = Vec::new();
     let mut lenient = false;
     let mut skip_serializing_none = false;
+    let mut some_priority = false;
 
     for attribute in &ast.attrs {
         match &attribute.value {
-            &syn::MetaItem::Word(ref name) => handle_name(name, &mut lenient, &mut skip_serializing_none),
+            &syn::MetaItem::Word(ref name) => handle_name(name, &mut lenient, &mut skip_serializing_none, &mut some_priority),
             &syn::MetaItem::NameValue(ref name, ref value) => {
                 handle_name_value(name, value, &mut struct_name)
             }
@@ -191,13 +196,14 @@ fn parse_attributes(ast: &syn::DeriveInput) -> Data {
         optional_struct_name: struct_name,
         derives: derives,
         nested_names: create_nested_names_map(nested_original, nested_generated),
-        skip_serializing_none
+        skip_serializing_none,
+        some_priority
     }
 }
 
 fn create_struct(fields: &Vec<Field>, data: Data, generics: &Generics) -> Tokens {
-    let (orignal_struct_name, optional_struct_name, derives, nested_names, skip_serializing_none) = data.explode();
-    let (assigners, attributes, empty) = create_fields(&fields, nested_names, skip_serializing_none);
+    let (orignal_struct_name, optional_struct_name, derives, nested_names, skip_serializing_none, some_priority) = data.explode();
+    let (assigners, attributes, empty) = create_fields(&fields, nested_names, skip_serializing_none, some_priority);
 
     let (_, generics_no_where, _) = generics.split_for_impl();
 
@@ -226,7 +232,8 @@ fn create_struct(fields: &Vec<Field>, data: Data, generics: &Generics) -> Tokens
 fn create_fields(
     fields: &Vec<Field>,
     nested_names: HashMap<String, String>,
-    skip_serializing_none: bool
+    skip_serializing_none: bool,
+    some_priority: bool,
 ) -> (Tokens, Tokens, Tokens) {
     let mut attributes = quote!{};
     let mut assigners = quote!{};
@@ -249,7 +256,17 @@ fn create_fields(
 
         if type_name_string.starts_with("Option<") {
             next_attribute.append(quote!{ pub #field_name: #type_name, });
-            next_assigner = quote!{ self.#field_name = optional_struct.#field_name; };
+
+            if some_priority {
+                next_assigner = quote!{
+                    if let Some(attribute) = optional_struct.#field_name {
+                        self.#field_name.replace(attribute);
+                    }
+                };
+            } else {
+                next_assigner = quote!{ self.#field_name = optional_struct.#field_name; };
+            }
+
             next_empty = quote!{ #field_name: None, };
         } else if nested_names.contains_key(&type_name_string) {
             let type_name = Ident::new(nested_names.get(&type_name_string).unwrap().as_str());

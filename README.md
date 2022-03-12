@@ -4,6 +4,7 @@ This fork changes a few things:
 - Allows docstrings for struct values.
 - Allow setting `#[opt_lenient]` to allow other attributes on a struct, e.g. `#[model]` from wither.
 - Allow setting `#[opt_skip_serializing_none]` to add `#[serde(skip_serializing_if = "Option::is_none")]` to all fields.
+- Allow setting `#[opt_some_priority]` make existing Option values take presence over None values in the optional struct.
 
 # OptionalStruct
 [![Build Status](https://travis-ci.org/pLesur/OptionalStruct.svg?branch=stable_channel)](https://travis-ci.org/pLesur/OptionalStruct)
