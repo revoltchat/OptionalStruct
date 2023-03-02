@@ -5,6 +5,7 @@ extern crate quote;
 
 use proc_macro::TokenStream;
 use quote::Tokens;
+use syn::MetaItem;
 use std::collections::HashMap;
 use syn::Field;
 use syn::Generics;
@@ -13,7 +14,7 @@ use syn::Lit;
 
 #[proc_macro_derive(
     OptionalStruct,
-    attributes(optional_name, optional_derive, opt_nested_original, opt_nested_generated, opt_lenient, opt_skip_serializing_none, opt_some_priority)
+    attributes(optional_name, optional_derive, opt_nested_original, opt_nested_generated, opt_lenient, opt_skip_serializing_none, opt_some_priority, opt_passthrough)
 )]
 pub fn optional_struct(input: TokenStream) -> TokenStream {
     let s = input.to_string();
@@ -251,6 +252,26 @@ fn create_fields(
             });
         }
 
+        let mut existing_field_attributes = quote! {  };
+        let mut include_next_item = false;
+        for attr in &field.attrs {
+            if let MetaItem::Word(ident) = &attr.value {
+                if ident.to_string() == "opt_passthrough" {
+                    include_next_item = true;
+                    continue;
+                }
+            }
+
+            if include_next_item {
+                existing_field_attributes = quote! {
+                    #existing_field_attributes
+                    #attr
+                };
+
+                include_next_item = false;
+            }
+        }
+
         let type_name_string = quote!{#type_name}.to_string();
         let type_name_string: String = type_name_string.chars().filter(|&c| c != ' ').collect();
 
@@ -284,7 +305,7 @@ fn create_fields(
         }
 
         assigners = quote!{ #assigners #next_assigner };
-        attributes = quote!{ #attributes #next_attribute };
+        attributes = quote!{ #attributes #existing_field_attributes #next_attribute };
         empty = quote!{ #empty #next_empty }
     }
 
