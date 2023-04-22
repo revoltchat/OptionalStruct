@@ -1,7 +1,10 @@
 [package]
-name = "optional_struct"
+name = "revolt_optional_struct"
 version = "0.2.0"
-authors = ["Paul Lesur <paul.lesur@plesur.fr>"]
+authors = [
+    "Paul Lesur <paul.lesur@plesur.fr>",
+    "Paul Makles <me@insrt.uk>"
+]
 description = """
 Crate defining a macro that will generate, from a structure, another structure with only Option<T> fields
 """
@@ -9,12 +12,9 @@ readme = "README.md"
 categories = ["config"]
 keywords = ["macro", "configuration"]
 license = "Apache-2.0"
-repository = "https://github.com/pLesur/OptionalStruct"
+repository = "https://github.com/revoltchat/OptionalStruct"
 exclude = [".travis.yml"]
 edition = "2021"
-
-[badges]
-travis-ci = { repository = "pLesur/OptionalStruct", branch = "master" }
 
 [dependencies]
 syn = "0.11.11"
